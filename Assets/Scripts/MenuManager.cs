@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Photon.Pun;
 
 public class MenuManager : MonoBehaviour
 {
@@ -55,6 +56,12 @@ public class MenuManager : MonoBehaviour
 
     public void GoToMainMenuScene()
     {
+        // Disconnect from Photon before returning to the main menu.
+        if (PhotonNetwork.IsConnected)
+        {
+            PhotonNetwork.Disconnect();
+        }
+
         SceneManager.LoadScene("MainMenu");
     }
 

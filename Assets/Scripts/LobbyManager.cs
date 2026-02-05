@@ -6,62 +6,65 @@ using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
 
+/// Lobby UI manager:
+/// - StartGame: switches to the Photon-synced "GameScene".
+/// - LeaveLobby: leaves the Photon room and returns to "LobbyCreateJoin".
+/// - Player list view: keeps a UI list in sync with players that joined via Photon.
 public class LobbyManager : MonoBehaviourPunCallbacks
 {
     [Header("UI")]
-    public GameObject lobbyCanvas;
-    [Tooltip("Parent transform where player entries will be instantiated")]
+    [Tooltip("Parent transform where player entry prefabs will be instantiated (e.g. a VerticalLayoutGroup content).")]
     public Transform playersContent;
-    [Tooltip("Prefab for a single player row. Should contain a Text or TMP_Text component.")]
-    public GameObject playerEntryPrefab;
 
-    [Header("Scenes")]
-    [Tooltip("Scene name to load when leaving the lobby (CreateAndJoin scene).")]
-    public string createAndJoinSceneName = "CreateAndJoin";
+    [Tooltip("Prefab representing a single player row. Should contain a TMP_Text or legacy Text component to show the player's name.")]
+    public GameObject playerEntryPrefab;
 
     // cache active player entry GameObjects by actor number
     private readonly Dictionary<int, GameObject> _playerEntries = new Dictionary<int, GameObject>();
 
     void Start()
     {
-        // If already in a room when this opens, populate the list
+        // ensure UI references are sane
+        if (playersContent == null)
+        {
+            Debug.LogWarning("LobbyManager: playersContent is not assigned.");
+        }
+
+        if (playerEntryPrefab == null)
+        {
+            Debug.LogWarning("LobbyManager: playerEntryPrefab is not assigned.");
+        }
+
+        // populate if we are already in a room (e.g. reloaded scene)
         if (PhotonNetwork.InRoom)
         {
             PopulatePlayerList();
         }
     }
 
-    /// <summary>
-    /// Hides the lobby UI. Call this when starting the game from the lobby.
-    /// </summary>
+    /// Start game. Uses PhotonNetwork.LoadLevel so all connected clients can synchronize scene load.
     public void StartGame()
     {
-        if (lobbyCanvas != null)
-        {
-            lobbyCanvas.SetActive(false);
-        }
+        // Use PhotonNetwork.LoadLevel to sync scene for all clients (recommended for multiplayer)
+        PhotonNetwork.LoadLevel("GameScene");
     }
 
-    /// <summary>
-    /// Leaves the current room and switches to the CreateAndJoin scene.
-    /// </summary>
+    /// Leave the Photon room. OnLeftRoom callback will handle scene change.
     public void LeaveLobby()
     {
-        // request leaving the room (Photon will handle callbacks). Also change scene as requested.
         if (PhotonNetwork.InRoom)
         {
             PhotonNetwork.LeaveRoom();
+            // Do not immediately change scene here — wait for OnLeftRoom to ensure Photon cleaned up.
         }
-
-        if (!string.IsNullOrEmpty(createAndJoinSceneName))
+        else
         {
-            SceneManager.LoadScene(createAndJoinSceneName);
+            // If not in a room, just go back to the create/join scene immediately.
+            SceneManager.LoadScene("LobbyCreateJoin");
         }
     }
 
-    /// <summary>
-    /// Populate the UI list from current Photon player list.
-    /// </summary>
+    /// Populate the player UI list from current Photon player list.
     private void PopulatePlayerList()
     {
         ClearPlayerList();
@@ -72,12 +75,11 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         }
     }
 
-    /// <summary>
-    /// Add a UI row for the given player.
-    /// </summary>
+    /// Instantiate and configure a UI entry for a player.
+    /// Expects the prefab to contain a TMP_Text or Text component to display name.
     private void AddPlayerEntry(Player player)
     {
-        if (playerEntryPrefab == null || playersContent == null || player == null)
+        if (player == null || playerEntryPrefab == null || playersContent == null)
         {
             return;
         }
@@ -91,9 +93,10 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         GameObject entry = Instantiate(playerEntryPrefab, playersContent);
         entry.transform.localScale = Vector3.one;
 
-        // try to set text on TMP_Text first, then fallback to legacy Text
+        // Determine display name
         string displayName = string.IsNullOrEmpty(player.NickName) ? $"Player {player.ActorNumber}" : player.NickName;
 
+        // Try TMP_Text first, then fallback to legacy Text
         TMP_Text tmp = entry.GetComponentInChildren<TMP_Text>();
         if (tmp != null)
         {
@@ -106,27 +109,38 @@ public class LobbyManager : MonoBehaviourPunCallbacks
             {
                 uiText.text = displayName;
             }
+            else
+            {
+                // nothing to show - log to help debugging
+                Debug.LogWarning("LobbyManager: playerEntryPrefab has no TMP_Text or Text component in children.");
+            }
+        }
+
+        // Optional: mark master client / local player if prefab contains specific child named "MasterFlag" or "LocalFlag"
+        Transform masterFlag = entry.transform.Find("MasterFlag");
+        if (masterFlag != null)
+        {
+            masterFlag.gameObject.SetActive(player.IsMasterClient);
+        }
+
+        Transform localFlag = entry.transform.Find("LocalFlag");
+        if (localFlag != null)
+        {
+            localFlag.gameObject.SetActive(player.IsLocal);
         }
 
         _playerEntries[player.ActorNumber] = entry;
     }
 
-    /// <summary>
-    /// Remove and destroy the UI row for the given actor number.
-    /// </summary>
     private void RemovePlayerEntry(int actorNumber)
     {
-        GameObject entry;
-        if (_playerEntries.TryGetValue(actorNumber, out entry))
+        if (_playerEntries.TryGetValue(actorNumber, out GameObject entry))
         {
             Destroy(entry);
             _playerEntries.Remove(actorNumber);
         }
     }
 
-    /// <summary>
-    /// Clear the whole player UI list.
-    /// </summary>
     private void ClearPlayerList()
     {
         foreach (var kv in _playerEntries)
@@ -140,7 +154,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
         _playerEntries.Clear();
     }
 
-    // Photon callbacks to keep UI in sync:
+    #region Photon callbacks to keep UI in sync
 
     public override void OnJoinedRoom()
     {
@@ -163,5 +177,27 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     public override void OnLeftRoom()
     {
         ClearPlayerList();
+        // After leaving the room, go back to the Create/Join lobby scene.
+        SceneManager.LoadScene("LobbyCreateJoin");
     }
+
+    public override void OnMasterClientSwitched(Player newMasterClient)
+    {
+        // Update master flags if entries expose a "MasterFlag" child.
+        foreach (var kv in _playerEntries)
+        {
+            GameObject entry = kv.Value;
+            if (entry == null) continue;
+
+            Transform masterFlag = entry.transform.Find("MasterFlag");
+            if (masterFlag != null)
+            {
+                // find corresponding player by actor number (kv.Key)
+                bool isMaster = (newMasterClient != null && newMasterClient.ActorNumber == kv.Key);
+                masterFlag.gameObject.SetActive(isMaster);
+            }
+        }
+    }
+
+    #endregion
 }
