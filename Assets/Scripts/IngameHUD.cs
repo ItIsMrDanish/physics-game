@@ -10,6 +10,7 @@ public class IngameHUD : MonoBehaviour
     [Header("Timer Display")]
     public TMP_Text timerText;
 
+    // Debug options
     [Header("Timer Debug")]
     [Tooltip("When true, timer begins immediately.")]
     public bool DebugTimer = false;
@@ -39,6 +40,9 @@ public class IngameHUD : MonoBehaviour
 
         // Debug: add random score every second
         _debugScoreTimer = 0f;
+
+        // Debug: health drain every second
+        _debugHealthDrain = 0f;
     }
 
     void Update()
@@ -75,6 +79,16 @@ public class IngameHUD : MonoBehaviour
                 AddScoreB(randB);
             }
         }
+        // Debug behavior: reduce health by 5 every second
+        if (DebugHealthDrain)
+        {
+            _debugHealthDrain += Time.deltaTime;
+            if (_debugHealthDrain >= 1f)
+            {
+                _debugHealthDrain -= 1f;
+                ModifyHealth(-5);
+            }
+        }
     }
 
     // Start the match timer from zero.
@@ -99,15 +113,6 @@ public class IngameHUD : MonoBehaviour
         {
             _isRunning = true;
         }
-    }
-
-    // Reset the timer to zero and stop it.
-    public void ResetTimer()
-    {
-        _isRunning = false;
-        _elapsedTime = 0f;
-        UpdateTimerDisplay(_elapsedTime);
-        OnTimerUpdated?.Invoke(_elapsedTime);
     }
 
     private void UpdateTimerDisplay(float seconds)
@@ -195,11 +200,17 @@ public class IngameHUD : MonoBehaviour
     [Tooltip("Text showing current health as 'current / max'.")]
     public TMP_Text healthText;
 
-    [Tooltip("Optional UI Slider to visualize health fraction (assign in inspector).")]
+    [Tooltip("UI Slider to visualize health fraction.")]
     public Slider healthSlider;
 
     [Tooltip("Text displaying the player's character class.")]
     public TMP_Text classText;
+
+    // Debug options
+    [Header("Player Debug")]
+    [Tooltip("When true, removes 5 health every second.")]
+    public bool DebugHealthDrain = false;
+    private float _debugHealthDrain;
 
     // health values (other scripts should call SetCurrentHealth/SetMaxHealth or ModifyHealth)
     private int currentHealth = 100;
@@ -213,26 +224,20 @@ public class IngameHUD : MonoBehaviour
     // player's character class string
     private string characterClass = "Unknown";
 
-    /// <summary>
-    /// Set current health (clamped between 0 and maxHealth).
-    /// </summary>
+    // Set current health (clamped between 0 and maxHealth).
     public void SetCurrentHealth(int value)
     {
         currentHealth = Mathf.Clamp(value, 0, Mathf.Max(1, maxHealth));
         UpdatePlayerDisplays();
     }
 
-    /// <summary>
-    /// Modify current health by amount (positive or negative).
-    /// </summary>
+    // Modify current health by amount (positive or negative).
     public void ModifyHealth(int delta)
     {
         SetCurrentHealth(currentHealth + delta);
     }
 
-    /// <summary>
-    /// Set maximum health. Current health will be clamped to the new max.
-    /// </summary>
+    // Set maximum health. Current health will be clamped to the new max.
     public void SetMaxHealth(int value)
     {
         maxHealth = Mathf.Max(1, value);
@@ -240,9 +245,7 @@ public class IngameHUD : MonoBehaviour
         UpdatePlayerDisplays();
     }
 
-    /// <summary>
-    /// Set the character class string displayed on HUD.
-    /// </summary>
+    // Set the character class string displayed on HUD.
     public void SetCharacterClass(string className)
     {
         characterClass = className ?? "Unknown";
@@ -251,10 +254,10 @@ public class IngameHUD : MonoBehaviour
 
     private void UpdatePlayerDisplays()
     {
-        // Health text (e.g. "HP: 75 / 100")
+        // Health text
         if (healthText != null)
         {
-            healthText.text = $"HP: {currentHealth} / {maxHealth}";
+            healthText.text = $"{currentHealth} / {maxHealth}";
         }
 
         // Health slider
