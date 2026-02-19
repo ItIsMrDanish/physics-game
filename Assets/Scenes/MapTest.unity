@@ -3708,7 +3708,6 @@ GameObject:
   - component: {fileID: 218021626}
   - component: {fileID: 218021625}
   - component: {fileID: 218021624}
-  - component: {fileID: 218021628}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -3804,24 +3803,12 @@ Transform:
   m_GameObject: {fileID: 218021623}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.77, y: 0.93, z: 9.63}
+  m_LocalPosition: {x: 16.3, y: 0.93, z: 8.6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &218021628
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 218021623}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 93c2a0db55138884f8e98c5a10b765ac, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
 --- !u!1 &227826680
 GameObject:
   m_ObjectHideFlags: 0
@@ -26527,6 +26514,7 @@ GameObject:
   - component: {fileID: 1136865631}
   - component: {fileID: 1136865630}
   - component: {fileID: 1136865635}
+  - component: {fileID: 1136865636}
   m_Layer: 0
   m_Name: Enemie
   m_TagString: Enemie
@@ -26660,6 +26648,33 @@ NavMeshAgent:
   m_BaseOffset: 0.5
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
+--- !u!54 &1136865636
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1136865629}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
 --- !u!43 &1153840037
 Mesh:
   m_ObjectHideFlags: 0
