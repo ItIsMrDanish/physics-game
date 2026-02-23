@@ -5,11 +5,12 @@ using Photon.Pun;
 /// <summary>
 /// Instantiates the local player prefab via Photon when the scene is ready.
 /// Attach this to an empty GameObject in the scene (e.g. "PlayerSpawner") or to a persistent manager object.
+/// Drag your player prefab into the inspector (the prefab's name must match a prefab located in a Resources folder for PhotonNetwork.Instantiate to work).
 /// </summary>
 public class PlayerSpawner : MonoBehaviour
 {
-    [Tooltip("Name of the player prefab as in Resources folder used by PhotonNetwork.Instantiate")]
-    [SerializeField] private string playerPrefabName = "PlayerPrefab";
+    [Tooltip("Drag the player prefab here. The prefab's name must match a prefab in a Resources folder for PhotonNetwork.Instantiate.")]
+    [SerializeField] private GameObject playerPrefab;
 
     [Tooltip("Optional spawn points. If empty, will spawn at Vector3.zero.")]
     [SerializeField] private Transform[] spawnPoints;
@@ -27,6 +28,12 @@ public class PlayerSpawner : MonoBehaviour
             yield break;
         }
 
+        if (playerPrefab == null)
+        {
+            Debug.LogError($"{nameof(PlayerSpawner)}: playerPrefab is not assigned in the inspector. Aborting spawn.");
+            yield break;
+        }
+
         Vector3 spawnPos = Vector3.zero;
         Quaternion spawnRot = Quaternion.identity;
 
@@ -37,8 +44,9 @@ public class PlayerSpawner : MonoBehaviour
             spawnRot = t.rotation;
         }
 
-        // Photon expects the prefab to be in Resources/ and named exactly as playerPrefabName
-        PhotonNetwork.Instantiate(playerPrefabName, spawnPos, spawnRot);
+        // PhotonNetwork.Instantiate requires the prefab to be located in a Resources folder.
+        // We use the assigned prefab's name so you can drag & drop it in the inspector.
+        PhotonNetwork.Instantiate(playerPrefab.name, spawnPos, spawnRot);
 
         s_spawned = true;
     }
