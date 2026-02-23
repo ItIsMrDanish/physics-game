@@ -1,5 +1,6 @@
 using UnityEngine;
 using Photon.Pun;
+using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviourPun, IPunObservable
 {
@@ -8,6 +9,12 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     [SerializeField] private float jumpForce = 5f;
     [SerializeField] private float groundCheckDistance = 0.1f;
     [SerializeField] private LayerMask groundMask = ~0; // default: everything
+
+    [Header("Mouse / Camera")]
+    [SerializeField] private float mouseSensitivity = 1.5f;
+    [SerializeField] private bool invertY = false;
+    [SerializeField] private float minPitch = -80f;
+    [SerializeField] private float maxPitch = 80f;
 
     [Header("Networking")]
     [SerializeField] private float networkLerpRate = 10f;
@@ -18,6 +25,15 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     private Rigidbody _rb;
     private Vector3 _inputMove;
     private bool _wantJump;
+
+    // New Input System actions
+    private InputAction _moveAction;
+    private InputAction _jumpAction;
+    private InputAction _lookAction;
+
+    // camera rotation state
+    private float _yaw;
+    private float _pitch;
 
     // Network smoothing targets (for remote instances)
     private Vector3 _networkPosition;
@@ -32,6 +48,89 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
             _rb = gameObject.AddComponent<Rigidbody>();
             _rb.mass = 1f;
         }
+
+        // Create simple input actions (no InputActionAsset required)
+        _moveAction = new InputAction(
+            name: "Move",
+            type: InputActionType.Value,
+            expectedControlType: "Vector2");
+        // WASD / arrow keys composite
+        _moveAction.AddCompositeBinding("2DVector")
+            .With("Up", "<Keyboard>/w")
+            .With("Down", "<Keyboard>/s")
+            .With("Left", "<Keyboard>/a")
+            .With("Right", "<Keyboard>/d");
+        _moveAction.AddCompositeBinding("2DVector")
+            .With("Up", "<Keyboard>/upArrow")
+            .With("Down", "<Keyboard>/downArrow")
+            .With("Left", "<Keyboard>/leftArrow")
+            .With("Right", "<Keyboard>/rightArrow");
+        // Gamepad left stick
+        _moveAction.AddBinding("<Gamepad>/leftStick");
+
+        _jumpAction = new InputAction(
+            name: "Jump",
+            type: InputActionType.Button,
+            expectedControlType: "Button");
+        _jumpAction.AddBinding("<Keyboard>/space");
+        _jumpAction.AddBinding("<Gamepad>/buttonSouth");
+
+        _lookAction = new InputAction(
+            name: "Look",
+            type: InputActionType.Value,
+            expectedControlType: "Vector2");
+        _lookAction.AddBinding("<Mouse>/delta");
+        _lookAction.AddBinding("<Gamepad>/rightStick");
+    }
+
+    private void OnEnable()
+    {
+        // Enable inputs only for the local player to avoid every networked instance reading input
+        if (photonView != null && photonView.IsMine)
+        {
+            _moveAction.Enable();
+            _jumpAction.Enable();
+            _lookAction.Enable();
+
+            // Initialize camera rotation state from current transforms
+            Vector3 euler = transform.eulerAngles;
+            _yaw = euler.y;
+            if (playerCamera != null)
+            {
+                _pitch = playerCamera.transform.localEulerAngles.x;
+                // convert 0..360 to -180..180 to allow proper clamping
+                if (_pitch > 180f) _pitch -= 360f;
+            }
+            else
+            {
+                _pitch = 0f;
+            }
+
+            // Optional: lock cursor for local player
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+    }
+
+    private void OnDisable()
+    {
+        _moveAction.Disable();
+        _jumpAction.Disable();
+        _lookAction.Disable();
+
+        // restore cursor when disabled
+        if (Cursor.lockState == CursorLockMode.Locked)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        _moveAction.Dispose();
+        _jumpAction.Dispose();
+        _lookAction.Dispose();
     }
 
     private void Start()
@@ -78,10 +177,30 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         // Only read input for the local player
         if (photonView.IsMine)
         {
-            float h = Input.GetAxisRaw("Horizontal");
-            float v = Input.GetAxisRaw("Vertical");
-            _inputMove = new Vector3(h, 0f, v).normalized;
-            _wantJump = _wantJump || Input.GetButtonDown("Jump"); // record jump intent until FixedUpdate handles it
+            Vector2 move = _moveAction.ReadValue<Vector2>();
+            // map keyboard/gamepad axes (x -> strafe, y -> forward)
+            _inputMove = new Vector3(move.x, 0f, move.y);
+            _inputMove = Vector3.ClampMagnitude(_inputMove, 1f);
+
+            // jump was pressed this frame
+            _wantJump = _wantJump || _jumpAction.triggered;
+
+            // look (mouse/gamepad)
+            Vector2 look = _lookAction.ReadValue<Vector2>();
+            if (look != Vector2.zero)
+            {
+                float invert = invertY ? 1f : -1f;
+                _yaw += look.x * mouseSensitivity;
+                _pitch += look.y * mouseSensitivity * invert;
+                _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
+
+                // apply yaw to player transform, pitch to camera local rotation
+                transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+                if (playerCamera != null)
+                {
+                    playerCamera.transform.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+                }
+            }
         }
         else
         {
@@ -95,8 +214,9 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     {
         if (photonView.IsMine)
         {
-            // Move relative to the player's orientation (optional: world-space)
-            Vector3 moveWorld = transform.TransformDirection(_inputMove) * moveSpeed;
+            // Move relative to the player's orientation
+            Vector3 localMove = _inputMove * moveSpeed;
+            Vector3 moveWorld = transform.TransformDirection(localMove);
             Vector3 newPos = _rb.position + moveWorld * Time.fixedDeltaTime;
             _rb.MovePosition(newPos);
 
@@ -117,7 +237,6 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         else
         {
             // For remote objects we could apply received velocity if desired; currently smoothing position/rotation only.
-            // If you prefer physically applying velocity instead of kinematic interpolation, set rb.isKinematic = false in Start for remote objects and apply _networkVelocity here.
         }
     }
 
