@@ -5,6 +5,9 @@ public class Enemie : MonoBehaviour
 {
     private Transform player;
     private NavMeshAgent agent;
+    public int damagePerSecond = 10;
+    private float damageTimer = 0f;
+    private IngameHUD ingameHUD;
 
     void Start()
     {
@@ -17,6 +20,9 @@ public class Enemie : MonoBehaviour
 
         // Get the NavMeshAgent component
         agent = GetComponent<NavMeshAgent>();
+
+        // Find the IngameHUD in the scene
+        ingameHUD = FindObjectOfType<IngameHUD>();
     }
 
     void Update()
@@ -25,6 +31,30 @@ public class Enemie : MonoBehaviour
         {
             // Set the agent's destination to the player's position
             agent.SetDestination(player.position);
+        }
+    }
+
+    void OnCollisionStay(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            damageTimer += Time.deltaTime;
+            if (damageTimer >= 1f)
+            {
+                if (ingameHUD != null)
+                {
+                    ingameHUD.ModifyHealth(-damagePerSecond);
+                }
+                damageTimer = 0f;
+            }
+        }
+    }
+
+    void OnCollisionExit(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            damageTimer = 0f;
         }
     }
 }
