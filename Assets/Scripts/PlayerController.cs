@@ -8,37 +8,33 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     [SerializeField] private float moveSpeed = 6f;
     [SerializeField] private float jumpForce = 5f;
     [SerializeField] private float groundCheckDistance = 0.1f;
-    [SerializeField] private LayerMask groundMask = ~0; // default: everything
+    [SerializeField] private LayerMask groundMask = ~0;
 
     [Header("Mouse / Camera")]
-    [SerializeField] private float mouseSensitivity = 1.5f;
-    [SerializeField] private bool invertY = false;
+    [SerializeField] private Camera playerCamera;
+    [SerializeField] private float mouseSensitivity = 1f;
     [SerializeField] private float minPitch = -80f;
     [SerializeField] private float maxPitch = 80f;
 
-    [Header("Networking")]
-    [SerializeField] private float networkLerpRate = 10f;
-
-    [Header("References (optional)")]
-    [SerializeField] private Camera playerCamera; // assign a child camera for local player if you have one
+    [Header("Debug")]
+    [SerializeField] private bool enableDebugLogs = false;
 
     private Rigidbody _rb;
-    private Vector3 _inputMove;
-    private bool _wantJump;
+    private Vector2 _moveInput;
+    private bool _jumpPressed;
 
-    // New Input System actions
     private InputAction _moveAction;
-    private InputAction _jumpAction;
     private InputAction _lookAction;
+    private InputAction _jumpAction;
 
-    // camera rotation state
     private float _yaw;
     private float _pitch;
 
-    // Network smoothing targets (for remote instances)
+    // Network smoothing (kept minimal)
     private Vector3 _networkPosition;
     private Quaternion _networkRotation;
     private Vector3 _networkVelocity;
+    [SerializeField] private float networkLerpRate = 10f;
 
     private void Awake()
     {
@@ -49,76 +45,56 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
             _rb.mass = 1f;
         }
 
-        // Create simple input actions (no InputActionAsset required)
-        _moveAction = new InputAction(
-            name: "Move",
-            type: InputActionType.Value,
-            expectedControlType: "Vector2");
-        // WASD / arrow keys composite
+        // Input actions (WASD, mouse look, space)
+        _moveAction = new InputAction("Move", InputActionType.Value, expectedControlType: "Vector2");
         _moveAction.AddCompositeBinding("2DVector")
             .With("Up", "<Keyboard>/w")
             .With("Down", "<Keyboard>/s")
             .With("Left", "<Keyboard>/a")
             .With("Right", "<Keyboard>/d");
-        _moveAction.AddCompositeBinding("2DVector")
-            .With("Up", "<Keyboard>/upArrow")
-            .With("Down", "<Keyboard>/downArrow")
-            .With("Left", "<Keyboard>/leftArrow")
-            .With("Right", "<Keyboard>/rightArrow");
-        // Gamepad left stick
         _moveAction.AddBinding("<Gamepad>/leftStick");
 
-        _jumpAction = new InputAction(
-            name: "Jump",
-            type: InputActionType.Button,
-            expectedControlType: "Button");
-        _jumpAction.AddBinding("<Keyboard>/space");
-        _jumpAction.AddBinding("<Gamepad>/buttonSouth");
-
-        _lookAction = new InputAction(
-            name: "Look",
-            type: InputActionType.Value,
-            expectedControlType: "Vector2");
+        _lookAction = new InputAction("Look", InputActionType.Value, expectedControlType: "Vector2");
         _lookAction.AddBinding("<Mouse>/delta");
         _lookAction.AddBinding("<Gamepad>/rightStick");
+
+        _jumpAction = new InputAction("Jump", InputActionType.Button, expectedControlType: "Button");
+        _jumpAction.AddBinding("<Keyboard>/space");
+        _jumpAction.AddBinding("<Gamepad>/buttonSouth");
     }
 
     private void OnEnable()
     {
-        // Enable inputs only for the local player to avoid every networked instance reading input
+        _moveAction.Enable();
+        _lookAction.Enable();
+        _jumpAction.Enable();
+
         if (photonView != null && photonView.IsMine)
         {
-            _moveAction.Enable();
-            _jumpAction.Enable();
-            _lookAction.Enable();
-
-            // Initialize camera rotation state from current transforms
-            Vector3 euler = transform.eulerAngles;
-            _yaw = euler.y;
+            Vector3 e = transform.eulerAngles;
+            _yaw = e.y;
             if (playerCamera != null)
             {
                 _pitch = playerCamera.transform.localEulerAngles.x;
-                // convert 0..360 to -180..180 to allow proper clamping
                 if (_pitch > 180f) _pitch -= 360f;
             }
-            else
-            {
-                _pitch = 0f;
-            }
 
-            // Optional: lock cursor for local player
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+        }
+
+        if (enableDebugLogs)
+        {
+            Debug.Log($"[PlayerController] OnEnable - isMine={photonView.IsMine} name={gameObject.name} root={transform.root.name}");
         }
     }
 
     private void OnDisable()
     {
         _moveAction.Disable();
-        _jumpAction.Disable();
         _lookAction.Disable();
+        _jumpAction.Disable();
 
-        // restore cursor when disabled
         if (Cursor.lockState == CursorLockMode.Locked)
         {
             Cursor.lockState = CursorLockMode.None;
@@ -129,82 +105,76 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     private void OnDestroy()
     {
         _moveAction.Dispose();
-        _jumpAction.Dispose();
         _lookAction.Dispose();
+        _jumpAction.Dispose();
     }
 
     private void Start()
     {
-        // Owner-controlled object: enable physics simulation and local camera
         if (photonView.IsMine)
         {
             _rb.isKinematic = false;
-
             if (playerCamera != null)
             {
                 playerCamera.enabled = true;
                 var audio = playerCamera.GetComponent<AudioListener>();
-                if (audio != null)
-                {
-                    audio.enabled = true;
-                }
+                if (audio != null) audio.enabled = true;
             }
         }
         else
         {
-            // Remote objects: physics will be driven by network updates
             _rb.isKinematic = true;
-
             if (playerCamera != null)
             {
                 playerCamera.enabled = false;
                 var audio = playerCamera.GetComponent<AudioListener>();
-                if (audio != null)
-                {
-                    audio.enabled = false;
-                }
+                if (audio != null) audio.enabled = false;
             }
 
-            // Initialize smoothing targets
             _networkPosition = transform.position;
             _networkRotation = transform.rotation;
             _networkVelocity = Vector3.zero;
+        }
+
+        if (enableDebugLogs)
+        {
+            Debug.Log($"[PlayerController] Start - isMine={photonView.IsMine}, isKinematic={_rb.isKinematic}, constraints={_rb.constraints}");
         }
     }
 
     private void Update()
     {
-        // Only read input for the local player
+        Debug.Log("Update");
         if (photonView.IsMine)
         {
-            Vector2 move = _moveAction.ReadValue<Vector2>();
-            // map keyboard/gamepad axes (x -> strafe, y -> forward)
-            _inputMove = new Vector3(move.x, 0f, move.y);
-            _inputMove = Vector3.ClampMagnitude(_inputMove, 1f);
+            Vector2 mv = _moveAction.ReadValue<Vector2>();
+            _moveInput = Vector2.ClampMagnitude(mv, 1f);
+            Debug.Log("MV" + _moveInput);
 
-            // jump was pressed this frame
-            _wantJump = _wantJump || _jumpAction.triggered;
+            _jumpPressed = _jumpPressed || _jumpAction.triggered;
 
-            // look (mouse/gamepad)
             Vector2 look = _lookAction.ReadValue<Vector2>();
             if (look != Vector2.zero)
             {
-                float invert = invertY ? 1f : -1f;
                 _yaw += look.x * mouseSensitivity;
-                _pitch += look.y * mouseSensitivity * invert;
+                _pitch -= look.y * mouseSensitivity; // invert Y here by subtracting
                 _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
 
-                // apply yaw to player transform, pitch to camera local rotation
                 transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
                 if (playerCamera != null)
                 {
                     playerCamera.transform.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
                 }
             }
+
+            if (enableDebugLogs)
+            {
+                Debug.Log($"[PlayerController] Update - moveInput={_moveInput} jumpPressed={_jumpPressed} yaw={_yaw} pitch={_pitch}");
+            }
         }
         else
         {
-            // Smooth remote transform to network target
+            // smoothing for remote instances
             transform.position = Vector3.Lerp(transform.position, _networkPosition, networkLerpRate * Time.deltaTime);
             transform.rotation = Quaternion.Slerp(transform.rotation, _networkRotation, networkLerpRate * Time.deltaTime);
         }
@@ -212,32 +182,33 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
     private void FixedUpdate()
     {
-        if (photonView.IsMine)
+        if (!photonView.IsMine) return;
+
+        // horizontal movement (preserve vertical velocity)
+        Vector3 localMove = new Vector3(_moveInput.x, 0f, _moveInput.y) * moveSpeed;
+        Vector3 worldMove = transform.TransformDirection(localMove) * Time.fixedDeltaTime;
+        if (enableDebugLogs)
         {
-            // Move relative to the player's orientation
-            Vector3 localMove = _inputMove * moveSpeed;
-            Vector3 moveWorld = transform.TransformDirection(localMove);
-            Vector3 newPos = _rb.position + moveWorld * Time.fixedDeltaTime;
-            _rb.MovePosition(newPos);
+            Debug.Log($"[PlayerController] FixedUpdate - isKinematic={_rb.isKinematic} constraints={_rb.constraints} localMove={localMove} worldMove={worldMove} rb.velocity={_rb.linearVelocity}");
+        }
 
-            // Simple grounded check
-            bool grounded = IsGrounded();
+        _rb.MovePosition(_rb.position + worldMove);
 
-            if (_wantJump && grounded)
+        bool grounded = IsGrounded();
+        if (_jumpPressed && grounded)
+        {
+            Vector3 v = _rb.linearVelocity;  // corrected: use .velocity
+            v.y = 0f;
+            _rb.linearVelocity = v;
+            _rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+
+            if (enableDebugLogs)
             {
-                // clear existing vertical velocity then add jump impulse
-                Vector3 vel = _rb.linearVelocity;
-                vel.y = 0f;
-                _rb.linearVelocity = vel;
-                _rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+                Debug.Log($"[PlayerController] Jump applied - new velocity={_rb.linearVelocity}");
             }
+        }
 
-            _wantJump = false;
-        }
-        else
-        {
-            // For remote objects we could apply received velocity if desired; currently smoothing position/rotation only.
-        }
+        _jumpPressed = false;
     }
 
     private bool IsGrounded()
@@ -246,24 +217,20 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         return Physics.Raycast(origin, Vector3.down, groundCheckDistance + 0.1f, groundMask, QueryTriggerInteraction.Ignore);
     }
 
-    // IPunObservable implementation: serialize position/rotation/velocity for remote clients
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
         if (stream.IsWriting)
         {
-            // We own this player: send position, rotation and velocity
             stream.SendNext(transform.position);
             stream.SendNext(transform.rotation);
-            stream.SendNext(_rb.linearVelocity);
+            stream.SendNext(_rb.linearVelocity); // corrected: use .velocity
         }
         else
         {
-            // Remote player: receive networked state
             _networkPosition = (Vector3)stream.ReceiveNext();
             _networkRotation = (Quaternion)stream.ReceiveNext();
             _networkVelocity = (Vector3)stream.ReceiveNext();
 
-            // Optionally extrapolate position based on network time latency:
             float lag = Mathf.Abs((float)(PhotonNetwork.Time - info.SentServerTime));
             _networkPosition += _networkVelocity * lag;
         }
