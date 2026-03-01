@@ -9,6 +9,10 @@ public class Enemie : MonoBehaviour
     private float damageTimer = 0f;
     private IngameHUD ingameHUD;
 
+    [Header("Attack Settings")]
+    [Tooltip("Time in seconds between each attack.")]
+    public float attackDelay = 1f;
+
     void Start()
     {
         // Find the player by tag
@@ -22,7 +26,7 @@ public class Enemie : MonoBehaviour
         agent = GetComponent<NavMeshAgent>();
 
         // Find the IngameHUD in the scene
-        ingameHUD = FindObjectOfType<IngameHUD>();
+        ingameHUD = FindAnyObjectByType<IngameHUD>();
     }
 
     void Update()
@@ -39,7 +43,7 @@ public class Enemie : MonoBehaviour
         if (collision.gameObject.CompareTag("Player"))
         {
             damageTimer += Time.deltaTime;
-            if (damageTimer >= 1f)
+            if (damageTimer >= attackDelay)
             {
                 if (ingameHUD != null)
                 {
