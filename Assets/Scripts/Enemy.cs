@@ -17,10 +17,18 @@ public class Enemy : MonoBehaviour
     [Tooltip("How often to update the path to the player (in seconds).")]
     public float pathUpdateRate = 0.25f;
 
+    [Header("Health Settings")]
+    [Tooltip("Maximum health of the enemy.")]
+    public int maxHealth = 100;
+
+    private int currentHealth;
     private float pathUpdateTimer = 0f;
 
     void Start()
     {
+        // Initialize health
+        currentHealth = maxHealth;
+
         // Find the player by tag
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
@@ -71,5 +79,34 @@ public class Enemy : MonoBehaviour
         {
             damageTimer = 0f;
         }
+    }
+
+    // Call this method from weapons/projectiles to damage the enemy
+    public void TakeDamage(int damage)
+    {
+        currentHealth -= damage;
+
+        if (currentHealth <= 0)
+        {
+            Die();
+        }
+    }
+
+    // Get current health (useful for health bars)
+    public int GetCurrentHealth()
+    {
+        return currentHealth;
+    }
+
+    // Get max health
+    public int GetMaxHealth()
+    {
+        return maxHealth;
+    }
+
+    private void Die()
+    {
+        // Destroy the enemy GameObject
+        Destroy(gameObject);
     }
 }
