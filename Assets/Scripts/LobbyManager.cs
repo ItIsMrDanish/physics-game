@@ -35,6 +35,10 @@ public class LobbyManager : MonoBehaviourPunCallbacks
             Debug.LogWarning("LobbyManager: playerEntryPrefab is not assigned.");
         }
 
+        // Ensure scene loads are synchronized when the master client changes scenes.
+        // Setting this here makes the behavior robust even if it wasn't configured elsewhere.
+        PhotonNetwork.AutomaticallySyncScene = true;
+
         // populate if we are already in a room (e.g. reloaded scene)
         if (PhotonNetwork.InRoom)
         {
@@ -43,10 +47,31 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     }
 
     /// Start game. Uses PhotonNetwork.LoadLevel so all connected clients can synchronize scene load.
+    /// Only the master client will actually trigger the synchronized load. Non-master clients will request the master.
     public void StartGame()
     {
-        // Use PhotonNetwork.LoadLevel to sync scene for all clients (recommended for multiplayer)
-        PhotonNetwork.LoadLevel("GameScene");
+        if (!PhotonNetwork.InRoom)
+        {
+            Debug.LogWarning("StartGame called but not in a room.");
+            return;
+        }
+
+        // If this client is the master, start the run and sync the load for everyone.
+        if (PhotonNetwork.IsMasterClient)
+        {
+            // close the room to prevent late joiners
+            if (PhotonNetwork.CurrentRoom != null)
+            {
+                PhotonNetwork.CurrentRoom.IsOpen = false;
+            }
+
+            PhotonNetwork.LoadLevel("GameScene");
+        }
+        else
+        {
+            // Ask the master client to start the game. The master will call LoadLevel for everyone.
+            photonView.RPC(nameof(RPC_RequestStartGame), RpcTarget.MasterClient, PhotonNetwork.LocalPlayer.ActorNumber);
+        }
     }
 
     /// Leave the Photon room. OnLeftRoom callback will handle scene change.
@@ -200,4 +225,24 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     }
 
     #endregion
+
+    /// RPC received by the master client when a non-master requests the game start.
+    [PunRPC]
+    private void RPC_RequestStartGame(int requesterActorNumber, PhotonMessageInfo info)
+    {
+        // Only the master should process requests to start the game.
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            return;
+        }
+
+        // Optionally you can validate the requester here (e.g. check permissions or readiness).
+
+        if (PhotonNetwork.CurrentRoom != null)
+        {
+            PhotonNetwork.CurrentRoom.IsOpen = false;
+        }
+
+        PhotonNetwork.LoadLevel("GameScene");
+    }
 }
