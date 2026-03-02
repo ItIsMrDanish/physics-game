@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-public class Enemie : MonoBehaviour
+public class Enemy : MonoBehaviour
 {
     private Transform player;
     private NavMeshAgent agent;
@@ -12,6 +12,12 @@ public class Enemie : MonoBehaviour
     [Header("Attack Settings")]
     [Tooltip("Time in seconds between each attack.")]
     public float attackDelay = 1f;
+
+    [Header("Navigation Settings")]
+    [Tooltip("How often to update the path to the player (in seconds).")]
+    public float pathUpdateRate = 0.25f;
+
+    private float pathUpdateTimer = 0f;
 
     void Start()
     {
@@ -33,8 +39,13 @@ public class Enemie : MonoBehaviour
     {
         if (player != null && agent != null)
         {
-            // Set the agent's destination to the player's position
-            agent.SetDestination(player.position);
+            // Only update path periodically instead of every frame
+            pathUpdateTimer += Time.deltaTime;
+            if (pathUpdateTimer >= pathUpdateRate)
+            {
+                agent.SetDestination(player.position);
+                pathUpdateTimer = 0f;
+            }
         }
     }
 
