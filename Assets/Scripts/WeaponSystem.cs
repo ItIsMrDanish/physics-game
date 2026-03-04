@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.InputSystem;
 using Photon.Pun;
+using Photon.Realtime;
 
 public class WeaponSystem : MonoBehaviour
 {
@@ -139,17 +140,23 @@ public class WeaponSystem : MonoBehaviour
             Rigidbody rb = col.attachedRigidbody;
             if (rb != null && !rb.isKinematic)
             {
-                // If target has a PhotonView, request that all clients apply the same impulse so it's visible to others.
                 PhotonView targetPv = col.GetComponentInParent<PhotonView>();
                 if (targetPv != null)
                 {
-                    if (_photonView != null)
+                    // If the target has a receiver component, ask the owner to apply the impulse.
+                    // This keeps physics authoritative on the object's owner and avoids multiple clients applying forces.
+                    if (targetPv.GetComponent<NetworkedPushReceiver>() != null)
                     {
+                        // Invoke the RPC on the target's PhotonView and send it to the owner only.
+                        targetPv.RPC("RPC_ApplyPush", targetPv.Owner, pushDir, pushForce, agentPushScale);
+                    }
+                    else if (_photonView != null)
+                    {
+                        // Fallback: broadcast to all if receiver not present (original behavior).
                         _photonView.RPC(nameof(RPC_ApplyPush), RpcTarget.All, targetPv.ViewID, pushDir, pushForce, agentPushScale);
                     }
                     else
                     {
-                        // No local PhotonView for the attacker; fall back to local apply
                         rb.AddForce(pushDir * pushForce, ForceMode.Impulse);
                     }
                 }
@@ -169,7 +176,11 @@ public class WeaponSystem : MonoBehaviour
                 PhotonView targetPv = col.GetComponentInParent<PhotonView>();
                 if (targetPv != null)
                 {
-                    if (_photonView != null)
+                    if (targetPv.GetComponent<NetworkedPushReceiver>() != null)
+                    {
+                        targetPv.RPC("RPC_ApplyPush", targetPv.Owner, pushDir, pushForce, agentPushScale);
+                    }
+                    else if (_photonView != null)
                     {
                         _photonView.RPC(nameof(RPC_ApplyPush), RpcTarget.All, targetPv.ViewID, pushDir, pushForce, agentPushScale);
                     }
@@ -193,7 +204,11 @@ public class WeaponSystem : MonoBehaviour
                 PhotonView targetPv = col.GetComponentInParent<PhotonView>();
                 if (targetPv != null)
                 {
-                    if (_photonView != null)
+                    if (targetPv.GetComponent<NetworkedPushReceiver>() != null)
+                    {
+                        targetPv.RPC("RPC_ApplyPush", targetPv.Owner, pushDir, pushForce, agentPushScale);
+                    }
+                    else if (_photonView != null)
                     {
                         _photonView.RPC(nameof(RPC_ApplyPush), RpcTarget.All, targetPv.ViewID, pushDir, pushForce, agentPushScale);
                     }
@@ -213,6 +228,7 @@ public class WeaponSystem : MonoBehaviour
     /// <summary>
     /// RPC that applies a push to a networked object identified by PhotonView id.
     /// Executed on all clients so the physics/visuals are consistent.
+    /// This is kept as a fallback for networked objects that don't have a dedicated receiver component.
     /// </summary>
     [PunRPC]
     private void RPC_ApplyPush(int targetViewId, Vector3 pushDir, float force, float agentScale, PhotonMessageInfo info = default)
