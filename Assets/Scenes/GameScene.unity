@@ -11361,19 +11361,19 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 6581514811022533540, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: maxSpawnInterval
-      value: 1
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 6581514811022533540, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: minSpawnInterval
-      value: 1
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6581514811022533540, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: maxEnemiesPerSpawn
-      value: 10
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 6581514811022533540, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: minEnemiesPerSpawn
-      value: 10
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6581514811022533540, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: spawnPoints.Array.size
@@ -11401,7 +11401,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8721063795816629875, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 7.64
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8721063795816629875, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: m_LocalPosition.y
@@ -11409,7 +11409,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8721063795816629875, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 9.09
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8721063795816629875, guid: 0a4df96e6ca4a6b4aa19f06280ee920f, type: 3}
       propertyPath: m_LocalRotation.w
