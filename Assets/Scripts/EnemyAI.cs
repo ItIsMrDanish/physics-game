@@ -1,13 +1,13 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-public class Enemy : MonoBehaviour
+public class EnemyAI : MonoBehaviour
 {
     private Transform player;
     private NavMeshAgent agent;
-    public int damagePerSecond = 10;
+    public int damagePerAttack = 5;
     private float damageTimer = 0f;
-    private IngameHUD ingameHUD;
+    private PlayerController playerController;
 
     [Header("Attack Settings")]
     [Tooltip("Time in seconds between each attack.")]
@@ -39,8 +39,8 @@ public class Enemy : MonoBehaviour
         // Get the NavMeshAgent component
         agent = GetComponent<NavMeshAgent>();
 
-        // Find the IngameHUD in the scene
-        ingameHUD = FindAnyObjectByType<IngameHUD>();
+        // Find the PlayerController in the scene
+        playerController = FindAnyObjectByType<PlayerController>();
     }
 
     void Update()
@@ -64,9 +64,9 @@ public class Enemy : MonoBehaviour
             damageTimer += Time.deltaTime;
             if (damageTimer >= attackDelay)
             {
-                if (ingameHUD != null)
+                if (playerController != null)
                 {
-                    ingameHUD.ModifyHealth(-damagePerSecond);
+                    playerController.ModifyHealth(-damagePerAttack);
                 }
                 damageTimer = 0f;
             }

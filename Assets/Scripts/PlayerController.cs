@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using Photon.Pun;
 using UnityEngine.InputSystem;
@@ -15,6 +16,10 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     [SerializeField] private float mouseSensitivity = 1f;
     [SerializeField] private float minPitch = -80f;
     [SerializeField] private float maxPitch = 80f;
+
+    [Header("Health")]
+    [SerializeField] private int maxHealth = 100;
+    [SerializeField] private int startHealth = 100;
 
     [Header("Debug")]
     [SerializeField] private bool enableDebugLogs = false;
@@ -35,6 +40,18 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
     private Quaternion _networkRotation;
     private Vector3 _networkVelocity;
     [SerializeField] private float networkLerpRate = 10f;
+
+    // Health runtime
+    private int _currentHealth;
+    private bool _isEliminated;
+
+    // Event invoked when this player becomes eliminated (health reaches 0).
+    public event Action<PlayerController> OnEliminated;
+
+    public int CurrentHealth => _currentHealth;
+    public int MaxHealth => maxHealth;
+    public bool IsEliminated => _isEliminated;
+    public Camera PlayerCamera => playerCamera;
 
     private void Awake()
     {
@@ -111,6 +128,9 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
     private void Start()
     {
+        _currentHealth = Mathf.Clamp(startHealth, 0, Mathf.Max(1, maxHealth));
+        _isEliminated = false;
+
         if (photonView.IsMine)
         {
             _rb.isKinematic = false;
@@ -144,12 +164,12 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
     private void Update()
     {
-        Debug.Log("Update");
+        if (_isEliminated) return;
+
         if (photonView.IsMine)
         {
             Vector2 mv = _moveAction.ReadValue<Vector2>();
             _moveInput = Vector2.ClampMagnitude(mv, 1f);
-            Debug.Log("MV" + _moveInput);
 
             _jumpPressed = _jumpPressed || _jumpAction.triggered;
 
@@ -182,6 +202,7 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
 
     private void FixedUpdate()
     {
+        if (_isEliminated) return;
         if (!photonView.IsMine) return;
 
         // horizontal movement (preserve vertical velocity)
@@ -197,7 +218,7 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         bool grounded = IsGrounded();
         if (_jumpPressed && grounded)
         {
-            Vector3 v = _rb.linearVelocity;  // corrected: use .velocity
+            Vector3 v = _rb.linearVelocity;
             v.y = 0f;
             _rb.linearVelocity = v;
             _rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
@@ -217,19 +238,63 @@ public class PlayerController : MonoBehaviourPun, IPunObservable
         return Physics.Raycast(origin, Vector3.down, groundCheckDistance + 0.1f, groundMask, QueryTriggerInteraction.Ignore);
     }
 
+    /// <summary>
+    /// Change health by the given delta. When health reaches zero, the player is eliminated and the event is fired.
+    /// </summary>
+    /// <param name="delta">Positive to heal, negative to damage.</param>
+    public void ModifyHealth(int delta)
+    {
+        if (_isEliminated) return;
+
+        int newHealth = Mathf.Clamp(_currentHealth + delta, 0, Mathf.Max(1, maxHealth));
+        _currentHealth = newHealth;
+
+        if (_currentHealth == 0)
+        {
+            Eliminate();
+        }
+    }
+
+    private void Eliminate()
+    {
+        if (_isEliminated) return;
+        _isEliminated = true;
+
+        // disable local player control
+        enabled = false;
+
+        // disable physics interactions for eliminated players to prevent interference
+        if (_rb != null)
+        {
+            _rb.isKinematic = true;
+        }
+
+        // disable camera/audio for this player's own camera; GameManager will activate a spectator camera
+        if (playerCamera != null)
+        {
+            playerCamera.enabled = false;
+            var audio = playerCamera.GetComponent<AudioListener>();
+            if (audio != null) audio.enabled = false;
+        }
+
+        OnEliminated?.Invoke(this);
+    }
+
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
         if (stream.IsWriting)
         {
             stream.SendNext(transform.position);
             stream.SendNext(transform.rotation);
-            stream.SendNext(_rb.linearVelocity); // corrected: use .velocity
+            stream.SendNext(_rb.linearVelocity);
+            stream.SendNext(_currentHealth);
         }
         else
         {
             _networkPosition = (Vector3)stream.ReceiveNext();
             _networkRotation = (Quaternion)stream.ReceiveNext();
             _networkVelocity = (Vector3)stream.ReceiveNext();
+            _currentHealth = (int)stream.ReceiveNext();
 
             float lag = Mathf.Abs((float)(PhotonNetwork.Time - info.SentServerTime));
             _networkPosition += _networkVelocity * lag;

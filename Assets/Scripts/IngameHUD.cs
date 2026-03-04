@@ -1,19 +1,16 @@
 using System;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
 using TMPro;
+using Photon.Pun;
 
 public class IngameHUD : MonoBehaviour
 {
     /// TIMER DISPLAY
     [Header("Timer Display")]
     public TMP_Text timerText;
-
-    // Debug options
-    [Header("Timer Debug")]
-    [Tooltip("When true, timer begins immediately.")]
-    public bool DebugTimer = false;
 
     // Invoked every frame the timer updates with the elapsed time (seconds).
     public event Action<float> OnTimerUpdated;
@@ -27,6 +24,51 @@ public class IngameHUD : MonoBehaviour
     // Current elapsed time in seconds.
     public float ElapsedTime => _elapsedTime;
 
+    /// SCORE DISPLAY
+    [Header("Score Display")]
+    public TMP_Text scoreAAmount;
+    public TMP_Text scoreBAmount;
+
+    private int scoreA;
+    private int scoreB;
+
+    // cached values to avoid unnecessary UI updates
+    private int _lastScoreA = int.MinValue;
+    private int _lastScoreB = int.MinValue;
+
+    /// PLAYER DISPLAY
+    [Header("Player Display")]
+    [Tooltip("Text showing current health as 'current / max'.")]
+    public TMP_Text healthText;
+
+    [Tooltip("UI Slider to visualize health fraction.")]
+    public Slider healthSlider;
+
+    [Tooltip("Text displaying the player's character class.")]
+    public TMP_Text classText;
+
+    [HideInInspector] public PlayerController playerController;
+
+    // health values (kept for compatibility with existing API; will reflect PlayerController when available)
+    private int currentHealth = 100;
+    private int maxHealth = 100;
+
+    // cached values to avoid unnecessary UI updates
+    private int _lastCurrentHealth = int.MinValue;
+    private int _lastMaxHealth = int.MinValue;
+    private string _lastCharacterClass = string.Empty;
+
+    // player's character class string
+    private string characterClass = "Knight";
+
+    /// DEBUG OPTIONS
+    [Header("Debug Options")]
+    [Tooltip("When true, adds a random integer to both scores every second.")] public bool AddRandomScores = false;
+    private float _debugScoreTimer;
+
+    [Tooltip("When true, removes 5 health every second.")] public bool DebugHealthDrain = false;
+    private float _debugHealthDrain;
+
     void Start()
     {
         // initialize UI
@@ -34,15 +76,27 @@ public class IngameHUD : MonoBehaviour
         UpdateScoreDisplays();
         UpdatePlayerDisplays();
 
-        // Debug: start timer immediately
-        if (DebugTimer)
-            StartTimer();
+        // Start timer
+        StartTimer();
 
         // Debug: add random score every second
         _debugScoreTimer = 0f;
 
         // Debug: health drain every second
         _debugHealthDrain = 0f;
+
+        // If a PlayerController wasn't assigned in the inspector, try to find the local one.
+        if (playerController == null)
+        {
+            playerController = FindObjectsOfType<PlayerController>().FirstOrDefault(p => p.photonView != null && p.photonView.IsMine);
+        }
+
+        // Subscribe to elimination (if available) so HUD updates immediately on elimination.
+        if (playerController != null)
+        {
+            playerController.OnEliminated -= OnLocalPlayerEliminated;
+            playerController.OnEliminated += OnLocalPlayerEliminated;
+        }
     }
 
     void Update()
@@ -61,8 +115,19 @@ public class IngameHUD : MonoBehaviour
         }
 
         // update player UI only when values change
-        if (_lastCurrentHealth != currentHealth || _lastMaxHealth != maxHealth || _lastCharacterClass != characterClass)
+        int current = currentHealth;
+        int max = maxHealth;
+        if (playerController != null)
         {
+            current = playerController.CurrentHealth;
+            max = playerController.MaxHealth;
+        }
+
+        if (_lastCurrentHealth != current || _lastMaxHealth != max || _lastCharacterClass != characterClass)
+        {
+            // update cached backing fields so existing API remains consistent
+            currentHealth = current;
+            maxHealth = max;
             UpdatePlayerDisplays();
         }
 
@@ -86,7 +151,15 @@ public class IngameHUD : MonoBehaviour
             if (_debugHealthDrain >= 1f)
             {
                 _debugHealthDrain -= 1f;
-                ModifyHealth(-5);
+                // prefer PlayerController's health system when present
+                if (playerController != null)
+                {
+                    playerController.ModifyHealth(-5);
+                }
+                else
+                {
+                    ModifyHealth(-5);
+                }
             }
         }
     }
@@ -133,24 +206,6 @@ public class IngameHUD : MonoBehaviour
         return string.Format("{0:00}:{1:00}", mins, secs);
     }
 
-    /// SCORE DISPLAY
-    [Header("Score Display")]
-    public TMP_Text scoreAAmount;
-    public TMP_Text scoreBAmount;
-
-    private int scoreA;
-    private int scoreB;
-
-    // cached values to avoid unnecessary UI updates
-    private int _lastScoreA = int.MinValue;
-    private int _lastScoreB = int.MinValue;
-
-    // Debug options
-    [Header("Score Debug")]
-    [Tooltip("When true, adds a random integer to both scores every second.")]
-    public bool AddRandomScores = false;
-    private float _debugScoreTimer;
-
     // Increment score A by amount (positive or negative).
     public void AddScoreA(int amount)
     {
@@ -195,54 +250,53 @@ public class IngameHUD : MonoBehaviour
         _lastScoreB = scoreB;
     }
 
-    /// PLAYER DISPLAY
-    [Header("Player Display")]
-    [Tooltip("Text showing current health as 'current / max'.")]
-    public TMP_Text healthText;
-
-    [Tooltip("UI Slider to visualize health fraction.")]
-    public Slider healthSlider;
-
-    [Tooltip("Text displaying the player's character class.")]
-    public TMP_Text classText;
-
-    // Debug options
-    [Header("Player Debug")]
-    [Tooltip("When true, removes 5 health every second.")]
-    public bool DebugHealthDrain = false;
-    private float _debugHealthDrain;
-
-    // health values (other scripts should call SetCurrentHealth/SetMaxHealth or ModifyHealth)
-    private int currentHealth = 100;
-    private int maxHealth = 100;
-
-    // cached values to avoid unnecessary UI updates
-    private int _lastCurrentHealth = int.MinValue;
-    private int _lastMaxHealth = int.MinValue;
-    private string _lastCharacterClass = string.Empty;
-
-    // player's character class string
-    private string characterClass = "Unknown";
-
     // Set current health (clamped between 0 and maxHealth).
+    // When PlayerController is present, forward to its ModifyHealth(delta) to reach the requested value.
     public void SetCurrentHealth(int value)
     {
-        currentHealth = Mathf.Clamp(value, 0, Mathf.Max(1, maxHealth));
-        UpdatePlayerDisplays();
+        if (playerController != null)
+        {
+            int clamped = Mathf.Clamp(value, 0, Mathf.Max(1, playerController.MaxHealth));
+            int delta = clamped - playerController.CurrentHealth;
+            if (delta != 0)
+                playerController.ModifyHealth(delta);
+        }
+        else
+        {
+            currentHealth = Mathf.Clamp(value, 0, Mathf.Max(1, maxHealth));
+            UpdatePlayerDisplays();
+        }
     }
 
     // Modify current health by amount (positive or negative).
+    // When PlayerController is present, forward to it.
     public void ModifyHealth(int delta)
     {
-        SetCurrentHealth(currentHealth + delta);
+        if (playerController != null)
+        {
+            playerController.ModifyHealth(delta);
+        }
+        else
+        {
+            SetCurrentHealth(currentHealth + delta);
+        }
     }
 
     // Set maximum health. Current health will be clamped to the new max.
+    // PlayerController doesn't expose a setter for max in the current design, so this affects only the HUD if no playerController.
     public void SetMaxHealth(int value)
     {
-        maxHealth = Mathf.Max(1, value);
-        currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
-        UpdatePlayerDisplays();
+        if (playerController != null)
+        {
+            // No direct API on PlayerController to set maxHealth — ignore or extend PlayerController if you need to change it at runtime.
+            maxHealth = playerController.MaxHealth;
+        }
+        else
+        {
+            maxHealth = Mathf.Max(1, value);
+            currentHealth = Mathf.Clamp(currentHealth, 0, maxHealth);
+            UpdatePlayerDisplays();
+        }
     }
 
     // Set the character class string displayed on HUD.
@@ -254,17 +308,26 @@ public class IngameHUD : MonoBehaviour
 
     private void UpdatePlayerDisplays()
     {
+        int current = currentHealth;
+        int max = maxHealth;
+
+        if (playerController != null)
+        {
+            current = playerController.CurrentHealth;
+            max = playerController.MaxHealth;
+        }
+
         // Health text
         if (healthText != null)
         {
-            healthText.text = $"{currentHealth} / {maxHealth}";
+            healthText.text = $"{current} / {max}";
         }
 
         // Health slider
         if (healthSlider != null)
         {
-            healthSlider.maxValue = Mathf.Max(1, maxHealth);
-            healthSlider.value = Mathf.Clamp(currentHealth, 0, maxHealth);
+            healthSlider.maxValue = Mathf.Max(1, max);
+            healthSlider.value = Mathf.Clamp(current, 0, max);
         }
 
         // Character class text
@@ -274,8 +337,22 @@ public class IngameHUD : MonoBehaviour
         }
 
         // update cached values
-        _lastCurrentHealth = currentHealth;
-        _lastMaxHealth = maxHealth;
+        _lastCurrentHealth = current;
+        _lastMaxHealth = max;
         _lastCharacterClass = characterClass;
+    }
+
+    private void OnLocalPlayerEliminated(PlayerController pc)
+    {
+        // ensure HUD shows zero immediately
+        UpdatePlayerDisplays();
+    }
+
+    private void OnDestroy()
+    {
+        if (playerController != null)
+        {
+            playerController.OnEliminated -= OnLocalPlayerEliminated;
+        }
     }
 }

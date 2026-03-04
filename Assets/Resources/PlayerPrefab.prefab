@@ -172,9 +172,11 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   playerCamera: {fileID: 8958348318919101255}
-  mouseSensitivity: 1
+  mouseSensitivity: 0.5
   minPitch: -80
   maxPitch: 80
+  maxHealth: 100
+  startHealth: 100
   enableDebugLogs: 0
   networkLerpRate: 10
 --- !u!114 &4137398913763779206
@@ -196,7 +198,7 @@ MonoBehaviour:
   cooldown: 1
   hitMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 55
   drawGizmos: 1
   weaponModel: {fileID: -8679921383154817045, guid: eadb2d590d6fab2409ebb8fa42edd2b9, type: 3}
 --- !u!54 &7978132477395253746
@@ -368,13 +370,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IngameHUD
   timerText: {fileID: 0}
-  DebugTimer: 0
   scoreAAmount: {fileID: 6205626986160343014}
   scoreBAmount: {fileID: 6682968571445177000}
-  AddRandomScores: 0
   healthText: {fileID: 0}
   healthSlider: {fileID: 0}
   classText: {fileID: 0}
+  playerController: {fileID: 0}
+  AddRandomScores: 0
   DebugHealthDrain: 0
 --- !u!1 &1871875903127028078
 GameObject:
@@ -631,13 +633,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IngameHUD
   timerText: {fileID: 0}
-  DebugTimer: 0
   scoreAAmount: {fileID: 0}
   scoreBAmount: {fileID: 0}
-  AddRandomScores: 0
   healthText: {fileID: 7974863791678850674}
   healthSlider: {fileID: 8047202635254656628}
   classText: {fileID: 7762447194824525727}
+  playerController: {fileID: 0}
+  AddRandomScores: 0
   DebugHealthDrain: 0
 --- !u!1 &2370736442576793835
 GameObject:
