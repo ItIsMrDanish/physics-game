@@ -129,6 +129,7 @@ MonoBehaviour:
   damagePerSecond: 10
   attackDelay: 1
   pathUpdateRate: 0.25
+  maxHealth: 100
 --- !u!195 &5788692224392584799
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -176,5 +177,5 @@ Rigidbody:
   m_UseGravity: 1
   m_IsKinematic: 0
   m_Interpolate: 0
-  m_Constraints: 0
+  m_Constraints: 112
   m_CollisionDetection: 0
