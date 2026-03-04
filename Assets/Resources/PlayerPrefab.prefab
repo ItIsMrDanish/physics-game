@@ -377,7 +377,6 @@ MonoBehaviour:
   classText: {fileID: 0}
   playerController: {fileID: 0}
   AddRandomScores: 0
-  DebugHealthDrain: 0
 --- !u!1 &1871875903127028078
 GameObject:
   m_ObjectHideFlags: 0
@@ -640,7 +639,6 @@ MonoBehaviour:
   classText: {fileID: 7762447194824525727}
   playerController: {fileID: 0}
   AddRandomScores: 0
-  DebugHealthDrain: 0
 --- !u!1 &2370736442576793835
 GameObject:
   m_ObjectHideFlags: 0
