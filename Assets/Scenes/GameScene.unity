@@ -10899,7 +10899,6 @@ MonoBehaviour:
   classText: {fileID: 0}
   playerController: {fileID: 0}
   AddRandomScores: 0
-  DebugHealthDrain: 0
 --- !u!43 &446467345
 Mesh:
   m_ObjectHideFlags: 0
@@ -37797,7 +37796,6 @@ MonoBehaviour:
   classText: {fileID: 0}
   playerController: {fileID: 0}
   AddRandomScores: 0
-  DebugHealthDrain: 0
 --- !u!114 &1562213730
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -51284,7 +51282,6 @@ MonoBehaviour:
   classText: {fileID: 0}
   playerController: {fileID: 0}
   AddRandomScores: 0
-  DebugHealthDrain: 1
 --- !u!4 &2126314163
 Transform:
   m_ObjectHideFlags: 0

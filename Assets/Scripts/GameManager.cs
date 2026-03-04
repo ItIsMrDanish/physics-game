@@ -24,11 +24,26 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
-        Debug.Log("[GameManager] Start - initializing.");
+        // Prefer a scene HUD (not one that lives under a Player prefab). If inspector didn't set it,
+        // attempt to find the best candidate automatically.
+        if (ingameHUD == null)
+        {
+            ingameHUD = FindBestIngameHUD();
+            Debug.Log(ingameHUD != null
+                ? $"[GameManager] Selected IngameHUD: {ingameHUD.gameObject.name}"
+                : "[GameManager] No IngameHUD found in scene.");
+        }
+        else
+        {
+            // warn if assigned HUD appears to be parented to a player (likely a prefab instance)
+            if (ingameHUD.GetComponentInParent<PlayerController>() != null)
+            {
+                Debug.LogWarning("[GameManager] Assigned ingameHUD appears to be parented under a PlayerController. This may be a HUD on the player prefab. GameManager will prefer a scene HUD when stopping timers.");
+            }
+        }
 
         if (deadTextCanvas != null)
         {
-            Debug.Log($"[GameManager] deadTextCanvas assigned: {deadTextCanvas.name}. Disabling at Start.");
             deadTextCanvas.gameObject.SetActive(false);
             deadTextCanvas.enabled = false;
             var cg = deadTextCanvas.GetComponent<CanvasGroup>();
@@ -39,14 +54,9 @@ public class GameManager : MonoBehaviour
                 cg.blocksRaycasts = false;
             }
         }
-        else
-        {
-            Debug.LogWarning("[GameManager] deadTextCanvas is NOT assigned in the inspector.");
-        }
 
         if (gameOverCanvas != null)
         {
-            Debug.Log($"[GameManager] gameOverCanvas assigned: {gameOverCanvas.name}. Disabling at Start.");
             gameOverCanvas.gameObject.SetActive(false);
             gameOverCanvas.enabled = false;
             var cg = gameOverCanvas.GetComponent<CanvasGroup>();
@@ -56,10 +66,6 @@ public class GameManager : MonoBehaviour
                 cg.interactable = false;
                 cg.blocksRaycasts = false;
             }
-        }
-        else
-        {
-            Debug.LogWarning("[GameManager] gameOverCanvas is NOT assigned in the inspector.");
         }
 
         RefreshPlayerListAndSubscribe();
@@ -97,26 +103,15 @@ public class GameManager : MonoBehaviour
 
     private void OnPlayerEliminated(PlayerController eliminated)
     {
-        Debug.Log($"[GameManager] OnPlayerEliminated called for '{(eliminated != null ? eliminated.name : "NULL")}'.");
+        // Hide the eliminated player's GameObject so they are no longer visible
+        if (eliminated != null)
+        {
+            eliminated.gameObject.SetActive(false);
+        }
 
-        // show dead-player canvas only (do NOT change any text)
+        // show dead-player canvas
         if (deadTextCanvas != null)
         {
-            Debug.Log("[GameManager] Enabling deadTextCanvas (only).");
-            // Ensure game over canvas is hidden when showing dead text
-            if (gameOverCanvas != null && gameOverCanvas.gameObject.activeSelf)
-            {
-                gameOverCanvas.gameObject.SetActive(false);
-                gameOverCanvas.enabled = false;
-                var gcg = gameOverCanvas.GetComponent<CanvasGroup>();
-                if (gcg != null)
-                {
-                    gcg.alpha = 0f;
-                    gcg.interactable = false;
-                    gcg.blocksRaycasts = false;
-                }
-            }
-
             deadTextCanvas.gameObject.SetActive(true);
             deadTextCanvas.enabled = true;
             var cg = deadTextCanvas.GetComponent<CanvasGroup>();
@@ -126,15 +121,10 @@ public class GameManager : MonoBehaviour
                 cg.interactable = true;
                 cg.blocksRaycasts = true;
             }
-            // IMPORTANT: do not modify any text components as requested.
-        }
-        else
-        {
-            Debug.LogWarning("[GameManager] deadTextCanvas is null - cannot show eliminated UI.");
         }
 
         // attempt to switch camera to another alive player (prefer not eliminated)
-        var alive = FindObjectsOfType<PlayerController>().Where(x => !x.IsEliminated).ToArray();
+        var alive = FindObjectsOfType<PlayerController>().Where(x => !x.IsEliminated && x.gameObject.activeSelf).ToArray();
         Debug.Log($"[GameManager] Alive players count after elimination: {alive.Length}");
 
         if (alive.Length > 0)
@@ -163,19 +153,20 @@ public class GameManager : MonoBehaviour
                 }
             }
 
-            if (ingameHUD != null)
+            // Stop timer: prefer the scene HUD, but make sure any running HUD timers are stopped.
+            if (ingameHUD != null && ingameHUD.GetComponentInParent<PlayerController>() == null)
             {
-                Debug.Log("[GameManager] Stopping match timer via IngameHUD.StopTimer().");
+                Debug.Log("[GameManager] Stopping timer on selected scene IngameHUD.");
                 ingameHUD.StopTimer();
             }
             else
             {
-                Debug.LogWarning("[GameManager] ingameHUD is null - cannot StopTimer().");
+                Debug.Log("[GameManager] Selected ingameHUD is missing or looks like a player HUD. Stopping timers on all IngameHUD instances found.");
+                StopTimerOnAllHUDs();
             }
 
             if (gameOverCanvas != null)
             {
-                Debug.Log("[GameManager] Enabling gameOverCanvas.");
                 gameOverCanvas.gameObject.SetActive(true);
                 gameOverCanvas.enabled = true;
                 var cg = gameOverCanvas.GetComponent<CanvasGroup>();
@@ -185,10 +176,6 @@ public class GameManager : MonoBehaviour
                     cg.interactable = true;
                     cg.blocksRaycasts = true;
                 }
-            }
-            else
-            {
-                Debug.LogWarning("[GameManager] gameOverCanvas is null - cannot show Game Over.");
             }
         }
     }
@@ -241,5 +228,39 @@ public class GameManager : MonoBehaviour
         // if the local player had cursor locked, unlock it (spectator)
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+    }
+
+    // Finds a scene-level IngameHUD (prefer not parented under any PlayerController).
+    private IngameHUD FindBestIngameHUD()
+    {
+        var all = FindObjectsOfType<IngameHUD>();
+        // Prefer active HUD not parented to a PlayerController
+        var sceneHud = all.FirstOrDefault(h => h.gameObject.activeInHierarchy && h.GetComponentInParent<PlayerController>() == null);
+        if (sceneHud != null) return sceneHud;
+        // Fallback to any active HUD
+        var activeHud = all.FirstOrDefault(h => h.gameObject.activeInHierarchy);
+        if (activeHud != null) return activeHud;
+        // Last resort: return first found
+        return all.FirstOrDefault();
+    }
+
+    // Stops timers on all IngameHUD instances (useful when prefab spawns create extra HUDs).
+    private void StopTimerOnAllHUDs()
+    {
+        var all = FindObjectsOfType<IngameHUD>();
+        Debug.Log($"[GameManager] StopTimerOnAllHUDs - found {all.Length} IngameHUD instance(s).");
+        foreach (var hud in all)
+        {
+            if (hud == null) continue;
+            Debug.Log($"[GameManager] Stopping timer on '{hud.gameObject.name}' (activeInHierarchy={hud.gameObject.activeInHierarchy}).");
+            try
+            {
+                hud.StopTimer();
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[GameManager] Exception stopping timer on '{hud.gameObject.name}': {ex.Message}");
+            }
+        }
     }
 }

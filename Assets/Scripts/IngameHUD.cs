@@ -66,9 +66,6 @@ public class IngameHUD : MonoBehaviour
     [Tooltip("When true, adds a random integer to both scores every second.")] public bool AddRandomScores = false;
     private float _debugScoreTimer;
 
-    [Tooltip("When true, removes 5 health every second.")] public bool DebugHealthDrain = false;
-    private float _debugHealthDrain;
-
     void Start()
     {
         // initialize UI
@@ -76,14 +73,11 @@ public class IngameHUD : MonoBehaviour
         UpdateScoreDisplays();
         UpdatePlayerDisplays();
 
-        // Start timer
+        // Starts timer on start.
         StartTimer();
 
         // Debug: add random score every second
         _debugScoreTimer = 0f;
-
-        // Debug: health drain every second
-        _debugHealthDrain = 0f;
 
         // If a PlayerController wasn't assigned in the inspector, try to find the local one.
         if (playerController == null)
@@ -142,24 +136,6 @@ public class IngameHUD : MonoBehaviour
                 int randB = UnityEngine.Random.Range(2, 11); // random integer from 2 to 10
                 AddScoreA(randA);
                 AddScoreB(randB);
-            }
-        }
-        // Debug behavior: reduce health by 5 every second
-        if (DebugHealthDrain)
-        {
-            _debugHealthDrain += Time.deltaTime;
-            if (_debugHealthDrain >= 1f)
-            {
-                _debugHealthDrain -= 1f;
-                // prefer PlayerController's health system when present
-                if (playerController != null)
-                {
-                    playerController.ModifyHealth(-5);
-                }
-                else
-                {
-                    ModifyHealth(-5);
-                }
             }
         }
     }
